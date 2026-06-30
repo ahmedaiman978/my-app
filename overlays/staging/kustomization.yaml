@@ -1,24 +1,24 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-bases:
-  - ../../base
 
 namespace: staging
 
 images:
-  - name: my-app
-    newName: docker.io/2871/my-app
-    newTag: latest
+- name: my-app
+  newName: 2871/my-app
+  newTag: f68832c99576dafb58918e851be6458455202b56
 
 patches:
-  - patch: |-
-      - op: replace
-        path: /spec/template/spec/containers/0/env/0/value
-        value: staging
-      - op: replace
-        path: /spec/replicas
-        value: 2
-    target:
-      kind: Deployment
-      name: my-app
+- patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/env/0/value
+      value: staging
+    - op: replace
+      path: /spec/replicas
+      value: 2
+  target:
+    kind: Deployment
+    name: my-app
+resources:
+- ../../base
