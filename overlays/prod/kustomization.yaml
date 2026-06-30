@@ -8,7 +8,7 @@ namespace: prod
 
 images:
   - name: my-app
-    newName: docker.io/ahmedaiman978@gmail.com/my-app
+    newName: docker.io/2871/my-app
     newTag: latest
 
 patches:
