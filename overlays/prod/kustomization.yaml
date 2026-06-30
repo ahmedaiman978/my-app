@@ -1,24 +1,27 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-bases:
-  - ../../base
 
 namespace: prod
 
 images:
+- name: my-app
+  newName: 2871/my-app
+  newTag: 6fb1ac41fa67884400296ab335f2310520df312f
   - name: my-app
     newName: docker.io/2871/my-app
     newTag: latest
 
 patches:
-  - patch: |-
-      - op: replace
-        path: /spec/template/spec/containers/0/env/0/value
-        value: production
-      - op: replace
-        path: /spec/replicas
-        value: 3
-    target:
-      kind: Deployment
-      name: my-app
+- patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/env/0/value
+      value: production
+    - op: replace
+      path: /spec/replicas
+      value: 3
+  target:
+    kind: Deployment
+    name: my-app
+resources:
+- ../../base
