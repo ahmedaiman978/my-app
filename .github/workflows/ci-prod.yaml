@@ -1,0 +1,17 @@
+name: CI - Production
+
+on:
+  push:
+    branches:
+      - main                 # triggers only on main branch push
+
+jobs:
+  ci:
+    uses: ./.github/workflows/reusable-ci.yaml
+    with:
+      environment: prod
+      overlay_path: overlays/prod
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      GIT_TOKEN: ${{ secrets.GIT_TOKEN }}

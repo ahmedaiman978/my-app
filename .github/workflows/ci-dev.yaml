@@ -1,0 +1,17 @@
+name: CI - Dev
+
+on:
+  push:
+    branches:
+      - dev                  # triggers only on dev branch push
+
+jobs:
+  ci:
+    uses: ./.github/workflows/reusable-ci.yaml    # call reusable workflow
+    with:
+      environment: dev
+      overlay_path: overlays/dev
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      GIT_TOKEN: ${{ secrets.GIT_TOKEN }}

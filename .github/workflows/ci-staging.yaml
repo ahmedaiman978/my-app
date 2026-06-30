@@ -1,0 +1,17 @@
+name: CI - Staging
+
+on:
+  push:
+    branches:
+      - staging              # triggers only on staging branch push
+
+jobs:
+  ci:
+    uses: ./.github/workflows/reusable-ci.yaml
+    with:
+      environment: staging
+      overlay_path: overlays/staging
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      GIT_TOKEN: ${{ secrets.GIT_TOKEN }}
