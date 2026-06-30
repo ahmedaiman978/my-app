@@ -8,7 +8,7 @@ namespace: dev
 images:
 - name: my-app
   newName: 2871/my-app
-  newTag: 3881b7bb739675963c79a9647fe1dca98eaffb96
+  newTag: 8f96695f4c9c815d31551e91287261c85e19b674
 
 patches:
 - patch: |-
