@@ -7,7 +7,7 @@ namespace: prod
 images:
 - name: my-app
   newName: 2871/my-app
-  newTag: fbbbd4ba7fb3b8a6181126b987f0c29cdaa0162a
+  newTag: 9a2e9c748c695ad8ec051176dcd4d678a5f3970a
 
 patches:
 - patch: |-
