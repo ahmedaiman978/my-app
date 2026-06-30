@@ -1,22 +1,22 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-bases:
-  - ../../base
 
 namespace: dev
 
 # Image will be updated by GitHub Actions automatically
 images:
-  - name: my-app
-    newName: docker.io/2871/my-app
-    newTag: latest
+- name: my-app
+  newName: 2871/my-app
+  newTag: 50f6be8afe0e55c4567878e1abbd03af804e4916
 
 patches:
-  - patch: |-
-      - op: replace
-        path: /spec/template/spec/containers/0/env/0/value
-        value: dev
-    target:
-      kind: Deployment
-      name: my-app
+- patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/env/0/value
+      value: dev
+  target:
+    kind: Deployment
+    name: my-app
+resources:
+- ../../base
