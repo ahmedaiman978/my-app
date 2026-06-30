@@ -7,7 +7,7 @@ namespace: staging
 images:
 - name: my-app
   newName: 2871/my-app
-  newTag: 1f1147b3a9873450134a59d518b7cfe03d684dd3
+  newTag: 57ff24e3a2171257c9c9617a0edea8f489adaaa4
 
 patches:
 - patch: |-
