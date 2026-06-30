@@ -7,7 +7,7 @@ spec:
   project: default
 
   source:
-    repoURL: https://github.com/ahmedaiman978@gmail.com/my-app.git
+    repoURL: https://github.com/ahmedaiman978/my-app.git
     targetRevision: main         # watches main branch
     path: overlays/prod
 
