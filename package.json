@@ -1,9 +1,29 @@
 {
-  "name": "my-app",
+  "name": "my-app-portal",
   "version": "1.0.0",
+  "description": "A professional and user-friendly Node.js portal with an improved UI",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
-    "test": "echo 'Tests passed!' && exit 0"
+    "dev": "nodemon app.js",
+    "test": "echo \"No tests configured yet\" && exit 0"
+  },
+  "keywords": [
+    "nodejs",
+    "express",
+    "portal",
+    "ui",
+    "dashboard",
+    "professional"
+  ],
+  "author": "Ahmed Aiman",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
   }
 }
