@@ -8,9 +8,6 @@ images:
 - name: my-app
   newName: 2871/my-app
   newTag: 6fb1ac41fa67884400296ab335f2310520df312f
-  - name: my-app
-    newName: docker.io/2871/my-app
-    newTag: latest
 
 patches:
 - patch: |-
