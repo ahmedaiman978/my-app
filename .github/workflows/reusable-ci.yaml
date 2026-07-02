@@ -1,7 +1,7 @@
 name: Reusable CI Workflow
 
 on:
-  workflow_call:               # makes this workflow reusable
+  workflow_call:
     inputs:
       environment:
         required: true
@@ -9,6 +9,10 @@ on:
       overlay_path:
         required: true
         type: string
+      image_name:
+        required: false
+        type: string
+        default: my-app
     secrets:
       DOCKERHUB_USERNAME:
         required: true
@@ -19,63 +23,64 @@ on:
 
 jobs:
   build-test-push:
+    if: ${{ github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]') }}
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GIT_TOKEN }}
+          fetch-depth: 0
 
-    # ── Step 1: Checkout Code ──────────────────────
-    - name: Checkout Code
-      uses: actions/checkout@v3
-      with:
-        token: ${{ secrets.GIT_TOKEN }}
-        fetch-depth: 0         # fetch all history
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
 
-    # ── Step 2: Run Tests ──────────────────────────
-    - name: Run Tests
-      run: npm test
-      # if tests fail → pipeline stops here ❌
-      # if tests pass → pipeline continues ✅
+      - name: Install dependencies
+        run: npm install
 
-    # ── Step 3: Login to DockerHub ─────────────────
-    - name: Login to DockerHub
-      uses: docker/login-action@v2
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Run tests
+        run: npm test
 
-    # ── Step 4: Build Docker Image ─────────────────
-    - name: Build Docker Image
-      run: |
-        docker build \
-          -t ${{ secrets.DOCKERHUB_USERNAME }}/my-app:${{ github.sha }} \
-          -t ${{ secrets.DOCKERHUB_USERNAME }}/my-app:${{ inputs.environment }}-latest \
-          .
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    # ── Step 5: Push Docker Image ──────────────────
-    - name: Push Docker Image
-      run: |
-        docker push ${{ secrets.DOCKERHUB_USERNAME }}/my-app:${{ github.sha }}
-        docker push ${{ secrets.DOCKERHUB_USERNAME }}/my-app:${{ inputs.environment }}-latest
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}:${{ github.sha }} \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}:${{ inputs.environment }}-latest \
+            .
 
-    # ── Step 6: Install Kustomize ──────────────────
-    - name: Install Kustomize
-      uses: imranismail/setup-kustomize@v2
-      with:
-        kustomize-version: "5.0.0"        
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}:${{ github.sha }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}:${{ inputs.environment }}-latest
 
-    # ── Step 7: Update Image Tag ───────────────────
-    - name: Update Image Tag in Kustomize
-      run: |
-        cd ${{ inputs.overlay_path }}
-        kustomize edit set image \
-          my-app=${{ secrets.DOCKERHUB_USERNAME }}/my-app:${{ github.sha }}
-        cat kustomization.yaml   # print to verify ✅
+      - name: Install Kustomize
+        uses: imranismail/setup-kustomize@v2
+        with:
+          kustomize-version: "5.0.0"
 
-    # ── Step 8: Commit and Push ────────────────────
-    - name: Commit and Push Image Tag Update
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add ${{ inputs.overlay_path }}/kustomization.yaml
-        git commit -m "ci: update ${{ inputs.environment }} image to ${{ github.sha }}"
-        git push
+      - name: Update image tag in kustomization
+        run: |
+          cd ${{ inputs.overlay_path }}
+          kustomize edit set image \
+            my-app=${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}:${{ github.sha }}
+          echo "Updated kustomization.yaml:"
+          cat kustomization.yaml
+
+      - name: Commit and push image tag update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ${{ inputs.overlay_path }}/kustomization.yaml
+          git diff --cached --quiet && echo "No manifest changes to commit" && exit 0
+          git commit -m "ci: update ${{ inputs.environment }} image to ${{ github.sha }} [skip ci]"
+          git push
+
