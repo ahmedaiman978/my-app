@@ -98,7 +98,8 @@ jobs:
       - name: Update Kustomize image tag
         run: |
           cd ${{ inputs.overlay_path }}
-          kustomize edit set image ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}=${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}:${{ github.sha }}
+          kustomize edit set image \
+            my-app=${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}:${{ github.sha }}
 
       - name: Commit manifest changes
         run: |
