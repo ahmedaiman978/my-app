@@ -6,6 +6,9 @@ namespace: dev
 
 # Image will be updated by GitHub Actions automatically
 images:
+- name: 2871/my-app
+  newName: 2871/my-app
+  newTag: 21d2889c2a63f70f07b4a8e4a0e29ef3f5a3796a
 - name: my-app
   newName: 2871/my-app
   newTag: 3b4aa64eb1bceca22debf96b19804c1c4a721273
