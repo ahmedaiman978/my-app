@@ -1,4 +1,4 @@
-name: Reusable CI Workflow
+name: reusable-ci
 
 on:
   workflow_call:
@@ -14,17 +14,18 @@ on:
         type: string
         default: my-app
     secrets:
+      GIT_TOKEN:
+        required: true
       DOCKERHUB_USERNAME:
         required: true
       DOCKERHUB_TOKEN:
         required: true
-      GIT_TOKEN:
-        required: true
 
 jobs:
-  build-test-push:
-    if: ${{ github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]') }}
+  build-test-push-update:
+    name: Build, test, push, and update manifests
     runs-on: ubuntu-latest
+    if: ${{ github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]') }}
 
     steps:
       - name: Checkout code
@@ -36,15 +37,22 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: 20
+          cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Run tests
+      - name: Run application tests
         run: npm test
 
-      - name: Login to DockerHub
+      - name: Run dependency vulnerability audit
+        run: npm audit --audit-level=high || true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -52,35 +60,54 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build \
+          docker buildx build \
+            --load \
             -t ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}:${{ github.sha }} \
             -t ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}:${{ inputs.environment }}-latest \
             .
 
-      - name: Push Docker image
+      - name: Smoke test built image
+        run: |
+          docker run -d --name app-smoke-test -p 3000:3000 ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}:${{ github.sha }}
+          sleep 8
+          curl -f http://localhost:3000/health
+
+      - name: Cleanup smoke test container
+        if: always()
+        run: |
+          docker stop app-smoke-test || true
+          docker rm app-smoke-test || true
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}:${{ github.sha }}
+          format: table
+          exit-code: 0
+          severity: CRITICAL,HIGH
+
+      - name: Push Docker images
         run: |
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}:${{ github.sha }}
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}:${{ inputs.environment }}-latest
 
       - name: Install Kustomize
-        uses: imranismail/setup-kustomize@v2
-        with:
-          kustomize-version: "5.0.0"
+        run: |
+          curl -sLo kustomize.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/latest/download/kustomize_linux_amd64.tar.gz
+          tar -xzf kustomize.tar.gz
+          sudo mv kustomize /usr/local/bin/kustomize
+          kustomize version
 
-      - name: Update image tag in kustomization
+      - name: Update Kustomize image tag
         run: |
           cd ${{ inputs.overlay_path }}
-          kustomize edit set image \
-            my-app=${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}:${{ github.sha }}
-          echo "Updated kustomization.yaml:"
-          cat kustomization.yaml
+          kustomize edit set image ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}=${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}:${{ github.sha }}
 
-      - name: Commit and push image tag update
+      - name: Commit manifest changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add ${{ inputs.overlay_path }}/kustomization.yaml
-          git diff --cached --quiet && echo "No manifest changes to commit" && exit 0
+          git diff --cached --quiet && exit 0
           git commit -m "ci: update ${{ inputs.environment }} image to ${{ github.sha }} [skip ci]"
           git push
-
