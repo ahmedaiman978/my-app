@@ -11,7 +11,7 @@ images:
   newTag: 11a056e268a7d2a74239c4cdef0bfd751daefcc0
 - name: my-app
   newName: 2871/my-app
-  newTag: 3b4aa64eb1bceca22debf96b19804c1c4a721273
+  newTag: 4ffb950bca72754c1211852e7f96bd080984a267
 
 patches:
 - patch: |-
