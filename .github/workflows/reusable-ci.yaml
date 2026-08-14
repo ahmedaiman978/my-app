@@ -209,10 +209,7 @@ jobs:
             --out reports \
             --data .dependency-check-data \
             --nvdApiKey "${{ secrets.NVD_API_KEY }}" \
-            --nvdApiDelay 12000 \
-            --nvdApiEndpoint "https://services.nvd.nist.gov/rest/json/cves/2.0" \
-            --nvdCveUrlModified "https://services.nvd.nist.gov/rest/json/cves/2.0?lastModStartDate={0}&lastModEndDate={1}" \
-            --nvdCveUrlBase "https://services.nvd.nist.gov/rest/json/cves/2.0?startIndex={0}&resultsPerPage={1}"
+            --nvdApiDelay 12000 
 
       - name: Copy OWASP HTML report into repo folder
         if: always()
