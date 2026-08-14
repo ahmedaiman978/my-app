@@ -103,12 +103,12 @@ jobs:
             -Dsonar.sources=. \
             -Dsonar.tests=. \
             -Dsonar.test.inclusions=**/*.test.js,**/*.spec.js,**/*.test.ts,**/*.spec.ts \
-            -Dsonar.exclusions=node_modules/**,coverage/**,.git/**,dist/**,build/**,security-reports/**,reports/**,dependency-check/** \
+            -Dsonar.exclusions=node_modules/**,coverage/**,.git/**,dist/**,build/**,security-reports/**,reports/**,dependency-check/**,.dependency-check-data/** \
             -Dsonar.sourceEncoding=UTF-8 \
             -Dsonar.host.url=http://localhost:9000 \
             -Dsonar.token=$SONAR_TOKEN
 
-      - name: Export SonarQube report
+      - name: Export SonarQube summary
         env:
           SONAR_TOKEN: ${{ steps.sonar_token.outputs.token }}
           PROJECT_NAME: ${{ inputs.image_name }}
@@ -118,11 +118,11 @@ jobs:
 
           curl -s -u "${SONAR_TOKEN}:" \
             "http://localhost:9000/api/qualitygates/project_status?projectKey=${PROJECT_NAME}" \
-            > security-reports/sonarqube/quality-gate.json
+            > quality-gate.json
 
           curl -s -u "${SONAR_TOKEN}:" \
             "http://localhost:9000/api/measures/component?component=${PROJECT_NAME}&metricKeys=bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,ncloc,security_rating,reliability_rating,sqale_rating" \
-            > security-reports/sonarqube/measures.json
+            > measures.json
 
           python3 - <<'PY'
           import json
@@ -131,10 +131,10 @@ jobs:
           project_name = os.environ["PROJECT_NAME"]
           commit_sha = os.environ["COMMIT_SHA"]
 
-          with open("security-reports/sonarqube/quality-gate.json") as f:
+          with open("quality-gate.json") as f:
               quality_data = json.load(f)
 
-          with open("security-reports/sonarqube/measures.json") as f:
+          with open("measures.json") as f:
               measures_data = json.load(f)
 
           quality_gate = quality_data.get("projectStatus", {}).get("status", "UNKNOWN")
@@ -175,6 +175,8 @@ jobs:
               out.write(f"| Maintainability Rating | {rating(measures.get('sqale_rating'))} |\n")
           PY
 
+          rm -f quality-gate.json measures.json
+
       - name: Run dependency vulnerability audit
         run: npm audit --audit-level=high || true
 
@@ -184,25 +186,36 @@ jobs:
           curl -fsSL -o dependency-check.zip "https://github.com/dependency-check/DependencyCheck/releases/download/v${DC_VERSION}/dependency-check-${DC_VERSION}-release.zip"
           unzip -o dependency-check.zip
 
+      - name: Cache OWASP Dependency-Check data
+        uses: actions/cache@v4
+        with:
+          path: .dependency-check-data
+          key: dependency-check-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            dependency-check-${{ runner.os }}-
+
       - name: Run OWASP Dependency-Check
         continue-on-error: true
         run: |
           mkdir -p reports
+          mkdir -p .dependency-check-data
           ./dependency-check/bin/dependency-check.sh \
             --project "${{ inputs.image_name }}" \
             --scan . \
             --format "HTML" \
             --out reports \
-            --noupdate
+            --data .dependency-check-data
 
-      - name: Copy OWASP report into repo folder
+      - name: Copy OWASP HTML report into repo folder
         if: always()
         run: |
           mkdir -p security-reports/owasp
-          if [ -d reports ] && [ "$(find reports -type f | wc -l)" -gt 0 ]; then
-            cp -r reports/* security-reports/owasp/
+          if [ -f reports/dependency-check-report.html ]; then
+            cp reports/dependency-check-report.html security-reports/owasp/
+          elif [ -d reports ] && [ "$(find reports -type f | wc -l)" -gt 0 ]; then
+            find reports -name "*.html" -exec cp {} security-reports/owasp/ \;
           else
-            echo "No OWASP report files found." > security-reports/owasp/README.txt
+            echo "No OWASP HTML report found." > security-reports/owasp/README.txt
           fi
 
       - name: Upload OWASP report artifact
