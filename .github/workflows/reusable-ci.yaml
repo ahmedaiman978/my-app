@@ -184,7 +184,7 @@ jobs:
 
       - name: Install OWASP Dependency-Check
         run: |
-          DC_VERSION=9.0.9
+          DC_VERSION=10.0.4
           curl -fsSL -o dependency-check.zip "https://github.com/dependency-check/DependencyCheck/releases/download/v${DC_VERSION}/dependency-check-${DC_VERSION}-release.zip"
           unzip -o dependency-check.zip
 
@@ -201,14 +201,18 @@ jobs:
         run: |
           mkdir -p reports
           mkdir -p .dependency-check-data
+
           ./dependency-check/bin/dependency-check.sh \
             --project "${{ inputs.image_name }}" \
             --scan . \
             --format "HTML" \
             --out reports \
             --data .dependency-check-data \
-            --nvdApiKey "${{ secrets.NVD_API_KEY }}"
-            --nvdApiDelay 12000
+            --nvdApiKey "${{ secrets.NVD_API_KEY }}" \
+            --nvdApiDelay 12000 \
+            --nvdApiEndpoint "https://services.nvd.nist.gov/rest/json/cves/2.0" \
+            --nvdCveUrlModified "https://services.nvd.nist.gov/rest/json/cves/2.0?lastModStartDate={0}&lastModEndDate={1}" \
+            --nvdCveUrlBase "https://services.nvd.nist.gov/rest/json/cves/2.0?startIndex={0}&resultsPerPage={1}"
 
       - name: Copy OWASP HTML report into repo folder
         if: always()
