@@ -1,7 +1,7 @@
 # SonarQube Summary
 
 - **Project:** my-app
-- **Commit:** 86996c006cd4a4415887f5f2cfc5cc6619c53de2
+- **Commit:** 52d89372e578cea67074b25943ae6e6a4288ed64
 - **Quality Gate:** OK
 
 ## Metrics
