@@ -45,8 +45,69 @@ jobs:
       - name: Run application tests
         run: npm test
 
+      - name: Start SonarQube container
+        run: |
+          docker run -d --name sonarqube \
+            -p 9000:9000 \
+            sonarqube:lts-community
+
+      - name: Wait for SonarQube to be ready
+        run: |
+          echo "Waiting for SonarQube to be ready..."
+          for i in {1..90}; do
+            STATUS=$(curl -s http://localhost:9000/api/system/status | sed -n 's/.*"status":"\([^"]*\)".*/\1/p')
+            echo "Current SonarQube status: $STATUS"
+            if [ "$STATUS" = "UP" ]; then
+              echo "SonarQube is ready."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "SonarQube did not become ready in time."
+          docker logs sonarqube
+          exit 1
+
+      - name: Generate SonarQube token
+        id: sonar_token
+        run: |
+          RESPONSE=$(curl -s -u admin:admin -X POST "http://localhost:9000/api/user_tokens/generate?name=github-actions-token")
+          TOKEN=$(echo "$RESPONSE" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+          if [ -z "$TOKEN" ]; then
+            echo "Failed to generate SonarQube token"
+            echo "$RESPONSE"
+            exit 1
+          fi
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
+
+      - name: Download and install Sonar Scanner
+        run: |
+          curl -Lo sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-6.1.0.4477-linux-x64.zip
+          unzip sonar-scanner.zip
+          echo "$PWD/sonar-scanner-6.1.0.4477-linux-x64/bin" >> $GITHUB_PATH
+
+      - name: Run SonarQube analysis
+        env:
+          SONAR_TOKEN: ${{ steps.sonar_token.outputs.token }}
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=${{ inputs.image_name }} \
+            -Dsonar.projectName=${{ inputs.image_name }} \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=http://localhost:9000 \
+            -Dsonar.token=$SONAR_TOKEN \
+            -Dsonar.exclusions=node_modules/**,coverage/**,.git/**
+
       - name: Run dependency vulnerability audit
         run: npm audit --audit-level=high || true
+
+      - name: Run OWASP Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: ${{ inputs.image_name }}
+          path: .
+          format: HTML
+          out: reports
+        continue-on-error: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -76,6 +137,12 @@ jobs:
         run: |
           docker stop app-smoke-test || true
           docker rm app-smoke-test || true
+
+      - name: Cleanup SonarQube container
+        if: always()
+        run: |
+          docker stop sonarqube || true
+          docker rm sonarqube || true
 
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@master
