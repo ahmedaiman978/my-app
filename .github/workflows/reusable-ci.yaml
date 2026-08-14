@@ -79,23 +79,21 @@ jobs:
           fi
           echo "token=$TOKEN" >> $GITHUB_OUTPUT
 
-      - name: Download and install Sonar Scanner
-        run: |
-          curl -Lo sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-6.1.0.4477-linux-x64.zip
-          unzip sonar-scanner.zip
-          echo "$PWD/sonar-scanner-6.1.0.4477-linux-x64/bin" >> $GITHUB_PATH
-
       - name: Run SonarQube analysis
+        uses: SonarSource/sonarqube-scan-action@v2
         env:
           SONAR_TOKEN: ${{ steps.sonar_token.outputs.token }}
-        run: |
-          sonar-scanner \
-            -Dsonar.projectKey=${{ inputs.image_name }} \
-            -Dsonar.projectName=${{ inputs.image_name }} \
-            -Dsonar.sources=. \
-            -Dsonar.host.url=http://localhost:9000 \
-            -Dsonar.token=$SONAR_TOKEN \
-            -Dsonar.exclusions=node_modules/**,coverage/**,.git/**
+          SONAR_HOST_URL: http://localhost:9000
+        with:
+          args: >
+            -Dsonar.projectKey=${{ inputs.image_name }}
+            -Dsonar.projectName=${{ inputs.image_name }}
+            -Dsonar.projectVersion=${{ github.sha }}
+            -Dsonar.sources=.
+            -Dsonar.tests=.
+            -Dsonar.test.inclusions=**/*.test.js,**/*.spec.js,**/*.test.ts,**/*.spec.ts
+            -Dsonar.exclusions=node_modules/**,coverage/**,.git/**,dist/**,build/**
+            -Dsonar.sourceEncoding=UTF-8
 
       - name: Run dependency vulnerability audit
         run: npm audit --audit-level=high || true
@@ -108,6 +106,13 @@ jobs:
           format: HTML
           out: reports
         continue-on-error: true
+
+      - name: Upload OWASP report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owasp-dependency-check-report
+          path: reports
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
