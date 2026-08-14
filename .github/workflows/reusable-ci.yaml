@@ -208,6 +208,7 @@ jobs:
             --out reports \
             --data .dependency-check-data \
             --nvdApiKey "${{ secrets.NVD_API_KEY }}"
+            --nvdApiDelay 8000
 
       - name: Copy OWASP HTML report into repo folder
         if: always()
