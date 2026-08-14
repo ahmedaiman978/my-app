@@ -206,21 +206,136 @@ jobs:
             --project "${{ inputs.image_name }}" \
             --scan . \
             --format "HTML" \
+            --format "JSON" \
             --out reports \
             --data .dependency-check-data \
             --nvdApiKey "${{ secrets.NVD_API_KEY }}" \
-            --nvdApiDelay 12000 
+            --nvdApiDelay 12000 \
+            --nvdApiEndpoint "https://services.nvd.nist.gov/rest/json/cves/2.0" \
+            --nvdCveUrlModified "https://services.nvd.nist.gov/rest/json/cves/2.0?lastModStartDate={0}&lastModEndDate={1}" \
+            --nvdCveUrlBase "https://services.nvd.nist.gov/rest/json/cves/2.0?startIndex={0}&resultsPerPage={1}" \
+            --disableOssIndex
 
-      - name: Copy OWASP HTML report into repo folder
+      - name: Generate human-readable OWASP summary
+        if: always()
+        env:
+          PROJECT_NAME: ${{ inputs.image_name }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p security-reports/owasp
+
+          if [ ! -f reports/dependency-check-report.json ]; then
+            echo "# OWASP Dependency-Check Summary" > security-reports/owasp/owasp-summary.md
+            echo "" >> security-reports/owasp/owasp-summary.md
+            echo "- **Project:** ${PROJECT_NAME}" >> security-reports/owasp/owasp-summary.md
+            echo "- **Commit:** ${COMMIT_SHA}" >> security-reports/owasp/owasp-summary.md
+            echo "- **Status:** No JSON report found" >> security-reports/owasp/owasp-summary.md
+            exit 0
+          fi
+
+          python3 - <<'PY'
+          import json
+          import os
+          from collections import Counter
+
+          project_name = os.environ["PROJECT_NAME"]
+          commit_sha = os.environ["COMMIT_SHA"]
+
+          with open("reports/dependency-check-report.json", "r", encoding="utf-8") as f:
+              data = json.load(f)
+
+          dependencies = data.get("dependencies", [])
+          vulnerable_dependencies = []
+          severity_counter = Counter()
+
+          for dep in dependencies:
+              vulns = dep.get("vulnerabilities", [])
+              if vulns:
+                  vulnerable_dependencies.append(dep)
+                  for v in vulns:
+                      severity = (
+                          v.get("severity")
+                          or v.get("cvssv3", {}).get("baseSeverity")
+                          or v.get("cvssv2", {}).get("severity")
+                          or "UNKNOWN"
+                      )
+                      severity_counter[severity.upper()] += 1
+
+          total_dependencies = len(dependencies)
+          total_vulnerable = len(vulnerable_dependencies)
+          total_vulns = sum(len(dep.get("vulnerabilities", [])) for dep in vulnerable_dependencies)
+
+          severity_order = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"]
+
+          with open("security-reports/owasp/owasp-summary.md", "w", encoding="utf-8") as out:
+              out.write("# OWASP Dependency-Check Summary\n\n")
+              out.write(f"- **Project:** {project_name}\n")
+              out.write(f"- **Commit:** {commit_sha}\n")
+              out.write(f"- **Dependencies scanned:** {total_dependencies}\n")
+              out.write(f"- **Vulnerable dependencies:** {total_vulnerable}\n")
+              out.write(f"- **Total vulnerabilities:** {total_vulns}\n\n")
+
+              out.write("## Vulnerability Severity Overview\n\n")
+              out.write("| Severity | Count |\n")
+              out.write("|---|---|\n")
+              for sev in severity_order:
+                  out.write(f"| {sev} | {severity_counter.get(sev, 0)} |\n")
+
+              out.write("\n## Top Vulnerable Dependencies\n\n")
+              out.write("| Dependency | Vulnerabilities |\n")
+              out.write("|---|---|\n")
+
+              for dep in vulnerable_dependencies[:20]:
+                  name = dep.get("fileName", dep.get("packagePath", "Unknown"))
+                  count = len(dep.get("vulnerabilities", []))
+                  out.write(f"| {name} | {count} |\n")
+
+              out.write("\n## Vulnerability Details\n\n")
+
+              for dep in vulnerable_dependencies[:20]:
+                  name = dep.get("fileName", dep.get("packagePath", "Unknown"))
+                  out.write(f"### {name}\n\n")
+                  out.write("| ID | Severity | CVSS | Title |\n")
+                  out.write("|---|---|---|---|\n")
+
+                  for v in dep.get("vulnerabilities", []):
+                      vuln_id = v.get("name", "N/A")
+                      severity = (
+                          v.get("severity")
+                          or v.get("cvssv3", {}).get("baseSeverity")
+                          or v.get("cvssv2", {}).get("severity")
+                          or "UNKNOWN"
+                      )
+                      score = (
+                          v.get("cvssv3", {}).get("baseScore")
+                          or v.get("cvssv2", {}).get("score")
+                          or "N/A"
+                      )
+                      title = v.get("description", "").replace("\n", " ").strip()
+                      if len(title) > 120:
+                          title = title[:117] + "..."
+                      out.write(f"| {vuln_id} | {severity} | {score} | {title} |\n")
+
+                  out.write("\n")
+          PY
+
+      - name: Copy OWASP reports into repo folder
         if: always()
         run: |
           mkdir -p security-reports/owasp
+
           if [ -f reports/dependency-check-report.html ]; then
             cp reports/dependency-check-report.html security-reports/owasp/
-          elif [ -d reports ] && [ "$(find reports -type f | wc -l)" -gt 0 ]; then
-            find reports -name "*.html" -exec cp {} security-reports/owasp/ \;
-          else
-            echo "No OWASP HTML report found." > security-reports/owasp/README.txt
+          fi
+
+          if [ ! -f security-reports/owasp/owasp-summary.md ]; then
+            echo "# OWASP Dependency-Check Summary" > security-reports/owasp/owasp-summary.md
+            echo "" >> security-reports/owasp/owasp-summary.md
+            echo "No readable OWASP summary could be generated." >> security-reports/owasp/owasp-summary.md
+          fi
+
+          if [ ! -f reports/dependency-check-report.html ] && [ ! -f security-reports/owasp/owasp-summary.md ]; then
+            echo "No OWASP report found." > security-reports/owasp/README.txt
           fi
 
       - name: Upload OWASP report artifact
