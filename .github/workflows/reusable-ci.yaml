@@ -20,6 +20,8 @@ on:
         required: true
       DOCKERHUB_TOKEN:
         required: true
+      NVD_API_KEY:
+        required: true
 
 jobs:
   build-test-push-update:
@@ -204,7 +206,8 @@ jobs:
             --scan . \
             --format "HTML" \
             --out reports \
-            --data .dependency-check-data
+            --data .dependency-check-data \
+            --nvdApiKey "${{ secrets.NVD_API_KEY }}"
 
       - name: Copy OWASP HTML report into repo folder
         if: always()
