@@ -79,7 +79,7 @@ jobs:
           fi
           echo "token=$TOKEN" >> $GITHUB_OUTPUT
 
-      - name: Set up Java for SonarScanner
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -103,7 +103,7 @@ jobs:
             -Dsonar.sources=. \
             -Dsonar.tests=. \
             -Dsonar.test.inclusions=**/*.test.js,**/*.spec.js,**/*.test.ts,**/*.spec.ts \
-            -Dsonar.exclusions=node_modules/**,coverage/**,.git/**,dist/**,build/**,security-reports/**,reports/** \
+            -Dsonar.exclusions=node_modules/**,coverage/**,.git/**,dist/**,build/**,security-reports/**,reports/**,dependency-check/** \
             -Dsonar.sourceEncoding=UTF-8 \
             -Dsonar.host.url=http://localhost:9000 \
             -Dsonar.token=$SONAR_TOKEN
@@ -178,22 +178,32 @@ jobs:
       - name: Run dependency vulnerability audit
         run: npm audit --audit-level=high || true
 
+      - name: Install OWASP Dependency-Check
+        run: |
+          DC_VERSION=9.0.9
+          curl -fsSL -o dependency-check.zip "https://github.com/dependency-check/DependencyCheck/releases/download/v${DC_VERSION}/dependency-check-${DC_VERSION}-release.zip"
+          unzip -o dependency-check.zip
+
       - name: Run OWASP Dependency-Check
-        uses: dependency-check/Dependency-Check_Action@main
-        env:
-          JAVA_HOME: ""
-        with:
-          project: ${{ inputs.image_name }}
-          path: .
-          format: HTML
-          out: reports
         continue-on-error: true
+        run: |
+          mkdir -p reports
+          ./dependency-check/bin/dependency-check.sh \
+            --project "${{ inputs.image_name }}" \
+            --scan . \
+            --format "HTML" \
+            --out reports \
+            --noupdate
 
       - name: Copy OWASP report into repo folder
         if: always()
         run: |
           mkdir -p security-reports/owasp
-          cp -r reports/* security-reports/owasp/ || true
+          if [ -d reports ] && [ "$(find reports -type f | wc -l)" -gt 0 ]; then
+            cp -r reports/* security-reports/owasp/
+          else
+            echo "No OWASP report files found." > security-reports/owasp/README.txt
+          fi
 
       - name: Upload OWASP report artifact
         uses: actions/upload-artifact@v4
