@@ -113,6 +113,7 @@ jobs:
           SONAR_TOKEN: ${{ steps.sonar_token.outputs.token }}
         run: |
           mkdir -p security-reports/sonarqube
+
           curl -s -u "${SONAR_TOKEN}:" \
             "http://localhost:9000/api/qualitygates/project_status?projectKey=${{ inputs.image_name }}" \
             > security-reports/sonarqube/quality-gate.json
@@ -121,16 +122,52 @@ jobs:
             "http://localhost:9000/api/measures/component?component=${{ inputs.image_name }}&metricKeys=bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,ncloc,security_rating,reliability_rating,sqale_rating" \
             > security-reports/sonarqube/measures.json
 
-          cat > security-reports/sonarqube/README.txt <<EOF
-          SonarQube report summary
-          Project: ${{ inputs.image_name }}
-          Commit: ${{ github.sha }}
-          Host: http://localhost:9000
+          QUALITY_GATE=$(python3 - <<'PY'
+          import json
+          with open("security-reports/sonarqube/quality-gate.json") as f:
+              data = json.load(f)
+          print(data.get("projectStatus", {}).get("status", "UNKNOWN"))
+          PY
+          )
 
-          Files:
-          - quality-gate.json
-          - measures.json
-          EOF
+          python3 - <<'PY'
+          import json
+
+          with open("security-reports/sonarqube/measures.json") as f:
+              measures_data = json.load(f)
+
+          measures = {}
+          for m in measures_data.get("component", {}).get("measures", []):
+              measures[m["metric"]] = m.get("value", "N/A")
+
+          def rating(value):
+              mapping = {
+                  "1.0": "A",
+                  "2.0": "B",
+                  "3.0": "C",
+                  "4.0": "D",
+                  "5.0": "E"
+              }
+              return mapping.get(str(value), value if value is not None else "N/A")
+
+          with open("security-reports/sonarqube/sonarqube-summary.md", "w") as out:
+              out.write("# SonarQube Summary\n\n")
+              out.write(f"- **Project:** my-app\n")
+              out.write(f"- **Commit:** ${GITHUB_SHA}\n")
+              out.write(f"- **Quality Gate:** ${QUALITY_GATE}\n\n")
+              out.write("## Metrics\n\n")
+              out.write("| Metric | Value |\n")
+              out.write("|---|---|\n")
+              out.write(f"| Bugs | {measures.get('bugs', 'N/A')} |\n")
+              out.write(f"| Vulnerabilities | {measures.get('vulnerabilities', 'N/A')} |\n")
+              out.write(f"| Code Smells | {measures.get('code_smells', 'N/A')} |\n")
+              out.write(f"| Coverage | {measures.get('coverage', 'N/A')}% |\n")
+              out.write(f"| Duplicated Lines Density | {measures.get('duplicated_lines_density', 'N/A')}% |\n")
+              out.write(f"| Lines of Code | {measures.get('ncloc', 'N/A')} |\n")
+              out.write(f"| Security Rating | {rating(measures.get('security_rating'))} |\n")
+              out.write(f"| Reliability Rating | {rating(measures.get('reliability_rating'))} |\n")
+              out.write(f"| Maintainability Rating | {rating(measures.get('sqale_rating'))} |\n")
+          PY
 
       - name: Run dependency vulnerability audit
         run: npm audit --audit-level=high || true
@@ -234,3 +271,4 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -m "ci: update ${{ inputs.environment }} image and security reports to ${{ github.sha }} [skip ci]"
           git push
+
