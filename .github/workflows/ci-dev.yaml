@@ -15,3 +15,4 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       GIT_TOKEN: ${{ secrets.GIT_TOKEN }}
+      NVD_API_KEY: ${{ secrets.NVD_API_KEY }}  
