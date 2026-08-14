@@ -79,21 +79,34 @@ jobs:
           fi
           echo "token=$TOKEN" >> $GITHUB_OUTPUT
 
+      - name: Set up Java for SonarScanner
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install SonarScanner CLI
+        run: |
+          SONAR_SCANNER_VERSION=5.0.1.3006
+          curl -fsSL -o sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip
+          unzip sonar-scanner.zip
+          echo "$PWD/sonar-scanner-${SONAR_SCANNER_VERSION}-linux/bin" >> $GITHUB_PATH
+
       - name: Run SonarQube analysis
-        uses: SonarSource/sonarqube-scan-action@v2
         env:
           SONAR_TOKEN: ${{ steps.sonar_token.outputs.token }}
-          SONAR_HOST_URL: http://localhost:9000
-        with:
-          args: >
-            -Dsonar.projectKey=${{ inputs.image_name }}
-            -Dsonar.projectName=${{ inputs.image_name }}
-            -Dsonar.projectVersion=${{ github.sha }}
-            -Dsonar.sources=.
-            -Dsonar.tests=.
-            -Dsonar.test.inclusions=**/*.test.js,**/*.spec.js,**/*.test.ts,**/*.spec.ts
-            -Dsonar.exclusions=node_modules/**,coverage/**,.git/**,dist/**,build/**
-            -Dsonar.sourceEncoding=UTF-8
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=${{ inputs.image_name }} \
+            -Dsonar.projectName=${{ inputs.image_name }} \
+            -Dsonar.projectVersion=${{ github.sha }} \
+            -Dsonar.sources=. \
+            -Dsonar.tests=. \
+            -Dsonar.test.inclusions=**/*.test.js,**/*.spec.js,**/*.test.ts,**/*.spec.ts \
+            -Dsonar.exclusions=node_modules/**,coverage/**,.git/**,dist/**,build/** \
+            -Dsonar.sourceEncoding=UTF-8 \
+            -Dsonar.host.url=http://localhost:9000 \
+            -Dsonar.token=$SONAR_TOKEN
 
       - name: Run dependency vulnerability audit
         run: npm audit --audit-level=high || true
